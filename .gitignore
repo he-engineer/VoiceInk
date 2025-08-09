@@ -97,4 +97,17 @@ Icon
 .AppleDesktop
 Network Trash Folder
 Temporary Items
-.apdisk 
+.apdisk
+
+# Build outputs and distribution
+build/
+dist/
+*.dmg
+default.profraw
+
+# External frameworks (should be built, not checked in)
+whisper.framework/
+
+# IDE and editor files
+.vscode/
+.kiro/

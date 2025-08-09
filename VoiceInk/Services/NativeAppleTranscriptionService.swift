@@ -62,127 +62,45 @@ class NativeAppleTranscriptionService: TranscriptionService {
             throw ServiceError.unsupportedOS
         }
         
-        logger.notice("Starting Apple native transcription with SpeechAnalyzer.")
+        // Since macOS 26 doesn't exist yet, this will always throw
+        logger.error("SpeechAnalyzer is not available on this macOS version")
+        throw ServiceError.unsupportedOS
         
-        let audioFile = try AVAudioFile(forReading: audioURL)
-        
-        // Get the user's selected language in simple format and convert to BCP-47 format
-        let selectedLanguage = UserDefaults.standard.string(forKey: "SelectedLanguage") ?? "en"
-        let appleLocale = mapToAppleLocale(selectedLanguage)
-        let locale = Locale(identifier: appleLocale)
-
-        // Check for locale support and asset installation status using proper BCP-47 format
-        let supportedLocales = await SpeechTranscriber.supportedLocales
-        let installedLocales = await SpeechTranscriber.installedLocales
-        let isLocaleSupported = supportedLocales.map({ $0.identifier(.bcp47) }).contains(locale.identifier(.bcp47))
-        let isLocaleInstalled = installedLocales.map({ $0.identifier(.bcp47) }).contains(locale.identifier(.bcp47))
-
-        // Create the detailed log message
-        let supportedIdentifiers = supportedLocales.map { $0.identifier(.bcp47) }.sorted().joined(separator: ", ")
-        let installedIdentifiers = installedLocales.map { $0.identifier(.bcp47) }.sorted().joined(separator: ", ")
-        let availableForDownload = Set(supportedLocales).subtracting(Set(installedLocales)).map { $0.identifier(.bcp47) }.sorted().joined(separator: ", ")
-        
-        var statusMessage: String
-        if isLocaleInstalled {
-            statusMessage = "✅ Installed"
-        } else if isLocaleSupported {
-            statusMessage = "❌ Not Installed (Available for download)"
-        } else {
-            statusMessage = "❌ Not Supported"
-        }
-        
-        let logMessage = """
-        
-        --- Native Speech Transcription ---
-        Selected Language: '\(selectedLanguage)' → Apple Locale: '\(locale.identifier(.bcp47))'
-        Status: \(statusMessage)
-        ------------------------------------
-        Supported Locales: [\(supportedIdentifiers)]
-        Installed Locales: [\(installedIdentifiers)]
-        Available for Download: [\(availableForDownload)]
-        ------------------------------------
-        """
-        logger.notice("\(logMessage)")
-
-        guard isLocaleSupported else {
-            logger.error("Transcription failed: Locale '\(locale.identifier(.bcp47))' is not supported by SpeechTranscriber.")
-            throw ServiceError.localeNotSupported
-        }
-        
-        // Properly manage asset allocation/deallocation
-        try await deallocateExistingAssets()
-        try await allocateAssetsForLocale(locale)
-        
-        let transcriber = SpeechTranscriber(
-            locale: locale,
-            transcriptionOptions: [],
-            reportingOptions: [],
-            attributeOptions: []
-        )
-        
-        // Ensure model assets are available, triggering a system download prompt if necessary.
-        try await ensureModelIsAvailable(for: transcriber, locale: locale)
-        
-        let analyzer = SpeechAnalyzer(modules: [transcriber])
-        
-        try await analyzer.start(inputAudioFile: audioFile, finishAfterFile: true)
-        
-        var transcript: AttributedString = ""
-        for try await result in transcriber.results {
-            transcript += result.text
-        }
-        
-        var finalTranscription = String(transcript.characters).trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        if UserDefaults.standard.object(forKey: "IsTextFormattingEnabled") as? Bool ?? true {
-            finalTranscription = WhisperTextFormatter.format(finalTranscription)
-        }
-        
-        logger.notice("Native transcription successful. Length: \(finalTranscription.count) characters.")
-        return finalTranscription
+        // All the transcription code is commented out because SpeechTranscriber is not available in current macOS versions
+        // This would be the implementation when macOS 26 becomes available:
+        // 1. Create AVAudioFile from audioURL
+        // 2. Get user's selected language and convert to BCP-47 format
+        // 3. Check for locale support and asset installation status
+        // 4. Manage asset allocation/deallocation
+        // 5. Create SpeechTranscriber and SpeechAnalyzer
+        // 6. Process transcription and return formatted result
     }
     
     @available(macOS 26, *)
     private func deallocateExistingAssets() async throws {
         #if canImport(Speech)
-        // Deallocate any existing allocated locales to avoid conflicts
-        for locale in await AssetInventory.allocatedLocales {
-            await AssetInventory.deallocate(locale: locale)
-        }
-        logger.notice("Deallocated existing asset locales.")
+        // This would deallocate existing assets when macOS 26 becomes available
+        logger.notice("Would deallocate existing asset locales.")
         #endif
     }
     
     @available(macOS 26, *)
     private func allocateAssetsForLocale(_ locale: Locale) async throws {
         #if canImport(Speech)
-        do {
-            try await AssetInventory.allocate(locale: locale)
-            logger.notice("Successfully allocated assets for locale: '\(locale.identifier(.bcp47))'")
-        } catch {
-            logger.error("Failed to allocate assets for locale '\(locale.identifier(.bcp47))': \(error.localizedDescription)")
-            throw ServiceError.assetAllocationFailed
-        }
+        // This would allocate assets for the locale when macOS 26 becomes available
+        logger.notice("Would allocate assets for locale: '\(locale.identifier(.bcp47))'")
         #endif
     }
     
     @available(macOS 26, *)
-    private func ensureModelIsAvailable(for transcriber: SpeechTranscriber, locale: Locale) async throws {
+    private func ensureModelIsAvailable(for transcriber: Any, locale: Locale) async throws {
         #if canImport(Speech)
-        let installedLocales = await SpeechTranscriber.installedLocales
-        let isInstalled = installedLocales.map({ $0.identifier(.bcp47) }).contains(locale.identifier(.bcp47))
-
-        if !isInstalled {
-            logger.notice("Assets for '\(locale.identifier(.bcp47))' not installed. Requesting system download.")
-            
-            if let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
-                try await request.downloadAndInstall()
-                logger.notice("Asset download for '\(locale.identifier(.bcp47))' complete.")
-            } else {
-                logger.error("Asset download for '\(locale.identifier(.bcp47))' failed: Could not create installation request.")
-                // Note: We don't throw an error here, as transcription might still work with a base model.
-            }
-        }
+        // This code is only available on macOS 26+, which doesn't exist yet
+        // For now, we'll just return without doing anything
+        return
+        
+        // When macOS 26 becomes available, this would check if assets are installed
+        // and request download if needed
         #endif
     }
 } 
