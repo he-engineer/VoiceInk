@@ -23,17 +23,33 @@ class PermissionManager: ObservableObject {
     }
     
     private func setupNotificationObservers() {
-        // Only observe when app becomes active, as this is a likely time for permissions to have changed
+        // Observe when app becomes active - permissions might have changed in System Preferences
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(applicationDidBecomeActive),
             name: NSApplication.didBecomeActiveNotification,
             object: nil
         )
+        
+        // Also observe when app resigns active (user might be going to System Preferences)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(applicationWillResignActive),
+            name: NSApplication.willResignActiveNotification,
+            object: nil
+        )
     }
     
     @objc private func applicationDidBecomeActive() {
-        checkAllPermissions()
+        print("🔄 App became active - checking all permissions...")
+        // Add a small delay to ensure system has updated permission states
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.checkAllPermissions()
+        }
+    }
+    
+    @objc private func applicationWillResignActive() {
+        print("⏸️ App will resign active - user might be going to System Preferences")
     }
     
     func checkAllPermissions() {
@@ -44,21 +60,34 @@ class PermissionManager: ObservableObject {
     }
     
     func checkAccessibilityPermissions() {
+        // Force a fresh check without caching
         let options: NSDictionary = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: false]
         let accessibilityEnabled = AXIsProcessTrustedWithOptions(options)
+        
         DispatchQueue.main.async {
             self.isAccessibilityEnabled = accessibilityEnabled
+            print("🔍 Accessibility Permission Check: \(accessibilityEnabled)")
         }
     }
     
     func checkScreenRecordingPermission() {
+        // Force a fresh check of screen recording permission
+        let screenRecordingEnabled = CGPreflightScreenCaptureAccess()
+        
         DispatchQueue.main.async {
-            self.isScreenRecordingEnabled = CGPreflightScreenCaptureAccess()
+            self.isScreenRecordingEnabled = screenRecordingEnabled
+            print("🔍 Screen Recording Permission Check: \(screenRecordingEnabled)")
         }
     }
     
     func requestScreenRecordingPermission() {
+        print("🎥 Requesting Screen Recording Permission...")
         CGRequestScreenCaptureAccess()
+        
+        // Check permission status after a short delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            self.checkScreenRecordingPermission()
+        }
     }
     
     func checkAudioPermissionStatus() {
@@ -91,6 +120,7 @@ struct PermissionCard: View {
     let buttonAction: () -> Void
     let checkPermission: () -> Void
     @State private var isRefreshing = false
+    @State private var refreshTimer: Timer?
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -123,6 +153,8 @@ struct PermissionCard: View {
                         withAnimation(.easeInOut(duration: 0.5)) {
                             isRefreshing = true
                         }
+                        
+                        print("🔄 Manual permission refresh for: \(title)")
                         checkPermission()
                         
                         // Reset the animation after a delay
@@ -179,6 +211,36 @@ struct PermissionCard: View {
         .background(CardBackground(isSelected: false))
         .cornerRadius(16)
         .shadow(color: Color.black.opacity(0.05), radius: 5, y: 2)
+        .onAppear {
+            startPeriodicRefresh()
+        }
+        .onDisappear {
+            stopPeriodicRefresh()
+        }
+        .onChange(of: isGranted) { granted in
+            if granted {
+                stopPeriodicRefresh()
+            } else {
+                startPeriodicRefresh()
+            }
+        }
+    }
+    
+    private func startPeriodicRefresh() {
+        // Only start periodic refresh if permission is not granted
+        guard !isGranted else { return }
+        
+        stopPeriodicRefresh() // Stop any existing timer
+        
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
+            print("⏰ Periodic refresh for: \(title)")
+            checkPermission()
+        }
+    }
+    
+    private func stopPeriodicRefresh() {
+        refreshTimer?.invalidate()
+        refreshTimer = nil
     }
 }
 
@@ -256,8 +318,14 @@ struct PermissionsView: View {
                         isGranted: permissionManager.isAccessibilityEnabled,
                         buttonTitle: "Open System Settings",
                         buttonAction: {
+                            print("🔧 Opening Accessibility settings...")
                             if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
                                 NSWorkspace.shared.open(url)
+                            }
+                            
+                            // Check permission after user returns (with delay)
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                                permissionManager.checkAccessibilityPermissions()
                             }
                         },
                         checkPermission: { permissionManager.checkAccessibilityPermissions() }
@@ -271,10 +339,19 @@ struct PermissionsView: View {
                         isGranted: permissionManager.isScreenRecordingEnabled,
                         buttonTitle: "Request Permission",
                         buttonAction: {
+                            print("🎥 Requesting Screen Recording permission...")
                             permissionManager.requestScreenRecordingPermission()
+                            
                             // After requesting, open system preferences as fallback
-                            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
-                                NSWorkspace.shared.open(url)
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+                                    NSWorkspace.shared.open(url)
+                                }
+                            }
+                            
+                            // Check permission after user returns (with delay)
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                                permissionManager.checkScreenRecordingPermission()
                             }
                         },
                         checkPermission: { permissionManager.checkScreenRecordingPermission() }
