@@ -228,7 +228,7 @@ struct SettingsView: View {
                     subtitle: "Keep VoiceInk up to date"
                 ) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("VoiceInk automatically checks for updates on launch and every other day.")
+                        Text("Automatic updates have been disabled. You can manually check for updates using the button below.")
                             .settingsDescription()
                         
                         Button("Check for Updates Now") {

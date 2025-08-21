@@ -345,12 +345,7 @@ class WhisperState: NSObject, ObservableObject {
                 NotificationCenter.default.post(name: .transcriptionCreated, object: newTranscription)
             }
             
-            if case .trialExpired = licenseViewModel.licenseState {
-                text = """
-                    Your trial has expired. Upgrade to VoiceInk Pro at tryvoiceink.com/buy
-                    \n\(text)
-                    """
-            }
+            // License checking disabled - no trial expiration message
 
             text += " "
 

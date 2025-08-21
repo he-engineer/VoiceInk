@@ -96,7 +96,8 @@ struct VoiceInkApp: App {
                     .environmentObject(enhancementService)
                     .modelContainer(container)
                     .onAppear {
-                        updaterViewModel.silentlyCheckForUpdates()
+                        // Automatic update checking disabled
+                        // updaterViewModel.silentlyCheckForUpdates()
                         AnnouncementsService.shared.start()
                         
                         // Start the transcription auto-cleanup service (handles immediate and scheduled transcript deletion)
@@ -179,9 +180,9 @@ class UpdaterViewModel: ObservableObject {
     init() {
         updaterController = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
         
-        // Enable automatic update checking
-        updaterController.updater.automaticallyChecksForUpdates = true
-        updaterController.updater.updateCheckInterval = 24 * 60 * 60
+        // Disable automatic update checking
+        updaterController.updater.automaticallyChecksForUpdates = false
+        updaterController.updater.updateCheckInterval = 0
         
         updaterController.updater.publisher(for: \.canCheckForUpdates)
             .assign(to: &$canCheckForUpdates)
